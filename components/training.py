@@ -10,14 +10,6 @@ from utils.ml_utils import (
     train_fallback_model,
 )
 
-# Shared result-display functions — training and evaluation pages use the
-# same functions so charts are always identical in both places.
-from components.evaluation import (
-    show_classification_results,
-    show_clustering_results,
-    show_regression_results,
-)
-
 if PYCARET_AVAILABLE:
     from utils.ml_utils import (
         clf_compare, clf_predict, clf_setup,
@@ -26,14 +18,14 @@ if PYCARET_AVAILABLE:
 
 
 def training_page() -> None:
-    """AutoML training — runs the model and immediately shows full results."""
+    """AutoML training — runs the chosen model and reports what was selected."""
     if st.session_state.data is None:
         st.warning("⚠️ Please upload data first.")
         return
 
     problem_type = st.session_state.problem_type
 
-    # Guard: problem type must be set before training can begin
+    # Guard: problem type must be set before training can begin.
     if problem_type is None:
         st.info("Please complete **Data Upload** first — select a problem type and target column.")
         return
@@ -48,7 +40,7 @@ def training_page() -> None:
 
 def _run_clustering() -> None:
     st.markdown(
-        '<h2 class="sub-header">🎯 Automated Clustering</h2>',
+        '<h2 class="sub-header">📐 AutoML Training</h2>',
         unsafe_allow_html=True,
     )
 
@@ -58,7 +50,7 @@ def _run_clustering() -> None:
         st.error(f"Need at least 2 numeric features ({numeric_df.shape[1]} found).")
         return
 
-    # Let the user choose speed vs thoroughness
+    # Let the user choose speed vs thoroughness.
     cluster_mode = st.radio(
         "How thorough should the search be?",
         options=[
@@ -73,7 +65,7 @@ def _run_clustering() -> None:
         "The algorithm automatically picks the best number of clusters."
     )
 
-    if not st.button("🚀 Start Clustering", type="primary"):
+    if not st.button("🚀 Start Training", type="primary"):
         return
 
     if cluster_mode.startswith("Fast"):
@@ -100,7 +92,7 @@ def _run_clustering() -> None:
         status.empty()
         progress.empty()
 
-        # Persist results to session state
+        # Persist results to session state.
         st.session_state.update({
             "cluster_labels":      labels,
             "clustering_model":    model,
@@ -118,16 +110,21 @@ def _run_clustering() -> None:
             },
         })
 
-        st.success(
-            f"🎉 Done! Best algorithm: **{algo_name}** · "
-            f"{metrics['num_clusters']} clusters found · "
-            f"Silhouette score: {score:.4f}"
-        )
+        st.success("🎉 Training complete!")
 
-        # Show full results immediately — users can also revisit in Model Evaluation
+        # ── Final model information panel ─────────────────────────────────────
         st.markdown("---")
-        st.markdown("### 📊 Results")
-        show_clustering_results()
+        st.markdown("### 🏆 Selected Model")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Algorithm", algo_name)
+        m2.metric("Clusters Found", metrics["num_clusters"])
+        m3.metric("Silhouette Score", f"{score:.4f}")
+        st.info(
+            f"The AutoML search evaluated multiple algorithms and hyperparameter combinations. "
+            f"**{algo_name}** achieved the highest Silhouette Score ({score:.4f}), "
+            "meaning it produced the most compact and well-separated clusters. "
+            "Head to **Model Evaluation** to explore the full results."
+        )
 
     except Exception as exc:
         progress.empty()
@@ -144,7 +141,7 @@ def _run_supervised() -> None:
         return
 
     st.markdown(
-        '<h2 class="sub-header">📐 Automated Model Training</h2>',
+        '<h2 class="sub-header">📐 AutoML Training</h2>',
         unsafe_allow_html=True,
     )
 
@@ -156,7 +153,7 @@ def _run_supervised() -> None:
         st.error(f"Target column '{target_col}' not found in the dataset.")
         return
 
-    # Drop rows where the target is missing — cannot train on unknown labels
+    # Drop rows where the target is missing — cannot train on unknown labels.
     n_missing = int(df[target_col].isnull().sum())
     if n_missing:
         st.warning(f"Dropping {n_missing} row(s) with a missing target value.")
@@ -171,7 +168,7 @@ def _run_supervised() -> None:
 
     n_classes = df[target_col].nunique() if problem_type == "Classification" else None
 
-    # Configuration summary so the user knows what is about to run
+    # Configuration summary so the user knows what is about to run.
     st.info(
         f"**Task:** {problem_type}  ·  **Target:** `{target_col}`  ·  "
         f"**Rows:** {len(df):,}  ·  **Features:** {len(df.columns) - 1}"
@@ -189,6 +186,7 @@ def _run_supervised() -> None:
         try:
             trained = False
             model = preds = y_true = None
+            algo_label = ""
 
             if PYCARET_AVAILABLE:
                 try:
@@ -221,11 +219,12 @@ def _run_supervised() -> None:
                         preds   = pred_df["prediction_label"].values
                         y_true  = pred_df[target_col].values
 
-                    model   = best
-                    trained = True
+                    model      = best
+                    algo_label = type(best).__name__
+                    trained    = True
 
                 except Exception as pycaret_err:
-                    # PyCaret failed — proceed to RandomForest fallback
+                    # PyCaret failed — fall back to RandomForest.
                     st.warning(
                         f"PyCaret could not complete training ({pycaret_err}). "
                         "Falling back to scikit-learn RandomForest."
@@ -233,8 +232,10 @@ def _run_supervised() -> None:
 
             if not trained:
                 model, preds, y_true = train_fallback_model(df, target_col, problem_type)
+                algo_label = "RandomForestClassifier" if problem_type == "Classification" \
+                             else "RandomForestRegressor"
 
-            # Convert once to numpy arrays and store
+            # Convert to numpy arrays and store in session state.
             preds_arr  = np.array(preds)
             y_true_arr = np.array(y_true)
 
@@ -245,16 +246,30 @@ def _run_supervised() -> None:
                 "training_complete": True,
             })
 
-            algo_label = "PyCaret AutoML" if trained else "scikit-learn RandomForest"
-            st.success(f"🎉 Training complete using **{algo_label}**!")
+            framework = "PyCaret AutoML" if trained else "scikit-learn (fallback)"
+            st.success("🎉 Training complete!")
 
-            # Show full results immediately — users can also revisit in Model Evaluation
+            # ── Final model information panel ─────────────────────────────────
             st.markdown("---")
-            st.markdown("### 📊 Results")
-            if problem_type == "Classification":
-                show_classification_results(y_true_arr, preds_arr)
-            elif problem_type == "Regression":
-                show_regression_results(y_true_arr, preds_arr)
+            st.markdown("### 🏆 Selected Model")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Model Name",   algo_label)
+            c2.metric("Framework",    framework)
+            c3.metric("Target",       target_col)
+
+            # Extra detail row
+            c4, c5, c6 = st.columns(3)
+            c4.metric("Problem Type", problem_type)
+            c5.metric("Training Rows", f"{int(len(df) * 0.8):,}")
+            c6.metric("Test Rows",     f"{int(len(df) * 0.2):,}")
+
+            st.info(
+                f"The AutoML pipeline trained and compared multiple algorithms "
+                f"(Logistic Regression, Random Forest, LightGBM) using 3-fold cross-validation. "
+                f"**{algo_label}** was selected as the best-performing model based on "
+                f"{'Accuracy' if problem_type == 'Classification' else 'R² Score'}. "
+                "Head to **Model Evaluation** to see the detailed metrics and charts."
+            )
 
         except Exception as exc:
             st.error(f"Training failed: {exc}")

@@ -1,9 +1,8 @@
 # components/evaluation.py
 #
 # Design: each task type has a public show_*_results() function.
-#   - training.py calls these right after training to display inline results.
-#   - evaluation_page() calls the same functions for the dedicated page.
-# This guarantees charts are identical in both places with no code duplication.
+#   - evaluation_page() calls these functions for the dedicated evaluation view.
+# Only the most informative metrics and charts are shown to keep the page clear.
 
 import numpy as np
 import pandas as pd
@@ -32,7 +31,7 @@ from utils.helpers import metric_row, pca_scatter_fig
 # ── Evaluation page entry point ───────────────────────────────────────────────
 
 def evaluation_page() -> None:
-    """Dedicated evaluation page — same charts as shown right after training."""
+    """Dedicated evaluation page — shows key metrics and essential charts."""
     if not st.session_state.training_complete:
         st.warning("⚠️ Train a model first.")
         return
@@ -41,7 +40,6 @@ def evaluation_page() -> None:
     st.markdown('<h2 class="sub-header">📈 Model Evaluation</h2>', unsafe_allow_html=True)
 
     if not problem_type:
-        # Should not happen after training, but guard gracefully
         st.info("No problem type set — please go to Data Upload and configure a task.")
         return
 
@@ -56,7 +54,6 @@ def evaluation_page() -> None:
         if y_true is not None:
             show_regression_results(y_true, preds)
     else:
-        # Unknown value — defensive fallback
         st.error(
             f"Unrecognised problem type '{problem_type}'. "
             "Please retrain from Data Upload."
@@ -78,13 +75,12 @@ def _load_supervised() -> tuple:
 # ── Classification ────────────────────────────────────────────────────────────
 
 def show_classification_results(y_true: np.ndarray, preds: np.ndarray) -> None:
-    """Display classification metrics and charts.
-
-    Called by both training_page() (inline) and evaluation_page() (dedicated view).
-    """
+    """Display essential classification metrics and charts."""
     y_true = np.array(y_true)
     preds  = np.array(preds)
 
+    # ── Evaluation metrics ────────────────────────────────────────────────────
+    st.markdown("#### 📊 Evaluation Metrics")
     acc  = accuracy_score(y_true, preds)
     prec = precision_score(y_true, preds, average="weighted", zero_division=0)
     rec  = recall_score(y_true, preds, average="weighted", zero_division=0)
@@ -97,7 +93,7 @@ def show_classification_results(y_true: np.ndarray, preds: np.ndarray) -> None:
         ("F1 Score (weighted)", f"{f1:.4f}",   "Balance between precision and recall."),
     ])
 
-    # Warn when the test set itself is heavily imbalanced
+    # Warn when the test set is heavily imbalanced.
     vc = pd.Series(y_true).value_counts()
     if len(vc) >= 2 and vc.max() / vc.min() > 5:
         st.warning(
@@ -105,7 +101,7 @@ def show_classification_results(y_true: np.ndarray, preds: np.ndarray) -> None:
             "Weighted metrics are shown — check per-class recall in the table below."
         )
 
-    # Confusion matrix: each cell shows how many samples were classified as what
+    # ── Confusion matrix ──────────────────────────────────────────────────────
     st.markdown("#### Where did the model make mistakes?")
     classes = sorted(set(np.concatenate([y_true, preds])))
     cm = confusion_matrix(y_true, preds, labels=classes)
@@ -122,7 +118,7 @@ def show_classification_results(y_true: np.ndarray, preds: np.ndarray) -> None:
         use_container_width=True,
     )
 
-    # Per-class breakdown table
+    # ── Per-class breakdown ───────────────────────────────────────────────────
     st.markdown("#### Per-class breakdown")
     report_df = pd.DataFrame(
         classification_report(y_true, preds, output_dict=True, zero_division=0)
@@ -133,13 +129,12 @@ def show_classification_results(y_true: np.ndarray, preds: np.ndarray) -> None:
 # ── Regression ────────────────────────────────────────────────────────────────
 
 def show_regression_results(y_true: np.ndarray, preds: np.ndarray) -> None:
-    """Display regression metrics and charts.
-
-    Called by both training_page() (inline) and evaluation_page() (dedicated view).
-    """
+    """Display essential regression metrics and charts."""
     y_true = np.array(y_true)
     preds  = np.array(preds)
 
+    # ── Evaluation metrics ────────────────────────────────────────────────────
+    st.markdown("#### 📊 Evaluation Metrics")
     r2   = r2_score(y_true, preds)
     mae  = mean_absolute_error(y_true, preds)
     rmse = np.sqrt(mean_squared_error(y_true, preds))
@@ -160,41 +155,27 @@ def show_regression_results(y_true: np.ndarray, preds: np.ndarray) -> None:
          "Average % error — skips rows where the actual value is zero."),
     ])
 
+    # ── Actual vs Predicted chart ─────────────────────────────────────────────
+    _min = float(min(y_true.min(), preds.min()))
+    _max = float(max(y_true.max(), preds.max()))
+    fig_av = px.scatter(
+        x=y_true, y=preds, opacity=0.6,
+        labels={"x": "Actual", "y": "Predicted"},
+        title="Actual vs Predicted — points on the red line are perfect",
+    )
+    fig_av.add_trace(go.Scatter(
+        x=[_min, _max], y=[_min, _max],
+        mode="lines", name="Perfect fit",
+        line=dict(dash="dash", color="red"),
+    ))
+    st.plotly_chart(fig_av, use_container_width=True)
+
+    # ── Residual distribution ─────────────────────────────────────────────────
     residuals = y_true - preds
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        # Points on the red line = perfect predictions
-        _min = float(min(y_true.min(), preds.min()))
-        _max = float(max(y_true.max(), preds.max()))
-        fig_av = px.scatter(
-            x=y_true, y=preds, opacity=0.6,
-            labels={"x": "Actual", "y": "Predicted"},
-            title="Actual vs Predicted — points on the red line are perfect",
-        )
-        fig_av.add_trace(go.Scatter(
-            x=[_min, _max], y=[_min, _max],
-            mode="lines", name="Perfect fit",
-            line=dict(dash="dash", color="red"),
-        ))
-        st.plotly_chart(fig_av, use_container_width=True)
-
-    with col_b:
-        # Random scatter around 0 = errors are unbiased
-        fig_res = px.scatter(
-            x=preds, y=residuals, opacity=0.6,
-            labels={"x": "Predicted", "y": "Error (Actual − Predicted)"},
-            title="Errors vs Predicted — random scatter near 0 is ideal",
-        )
-        fig_res.add_hline(y=0, line_dash="dash", line_color="red")
-        st.plotly_chart(fig_res, use_container_width=True)
-
-    # Error distribution — should be roughly bell-shaped and centred at 0
-    st.markdown("#### Error distribution")
     fig_hist = px.histogram(
         x=residuals, nbins=50, marginal="box",
         labels={"x": "Error (Actual − Predicted)"},
-        title="How errors are spread — centred near 0 means the model is unbiased",
+        title="Error distribution — centred near 0 means the model is unbiased",
     )
     fig_hist.add_vline(x=0, line_dash="dash", line_color="red")
     st.plotly_chart(fig_hist, use_container_width=True)
@@ -210,11 +191,7 @@ def show_regression_results(y_true: np.ndarray, preds: np.ndarray) -> None:
 # ── Clustering ────────────────────────────────────────────────────────────────
 
 def show_clustering_results() -> None:
-    """Display clustering metrics and charts.
-
-    Called by both training_page() (inline) and evaluation_page() (dedicated view).
-    Reads cluster labels and scaled data directly from session state.
-    """
+    """Display essential clustering metrics and charts."""
     labels = st.session_state.cluster_labels
     if labels is None:
         st.error("No cluster labels found — please retrain.")
@@ -229,7 +206,7 @@ def show_clustering_results() -> None:
         _cluster_summary_table(df, labels)
         return
 
-    # Use stored X_scaled; recompute only if it is missing or stale
+    # Use stored X_scaled; recompute only if missing or stale.
     X_scaled = st.session_state.clustering_X_scaled
     scaler   = st.session_state.clustering_scaler
     if X_scaled is None or X_scaled.shape[0] != len(df):
@@ -240,7 +217,7 @@ def show_clustering_results() -> None:
             X_scaled = numeric_df.fillna(numeric_df.mean()).values
         st.session_state.clustering_X_scaled = X_scaled
 
-    # DBSCAN marks noise points as -1; exclude them from metric computation
+    # DBSCAN marks noise points as -1; exclude them from metric computation.
     eval_mask   = labels != -1
     n_noise     = int((~eval_mask).sum())
     eval_X      = X_scaled[eval_mask]
@@ -261,6 +238,8 @@ def show_clustering_results() -> None:
         st.error(f"Could not compute clustering metrics: {e}")
         return
 
+    # ── Evaluation metrics ────────────────────────────────────────────────────
+    st.markdown("#### 📊 Evaluation Metrics")
     metric_row([
         ("Silhouette Score",  f"{sil:.4f}",
          "Range −1 to 1. Higher = clusters are well-separated and compact."),
@@ -276,7 +255,7 @@ def show_clustering_results() -> None:
             "excluded from metric computation but shown in the charts below."
         )
 
-    # Cluster size bar chart
+    # ── Cluster size bar chart ────────────────────────────────────────────────
     st.markdown("#### How many points are in each cluster?")
     vc = pd.Series(labels).value_counts().sort_index()
     label_names = ["Noise" if i == -1 else f"Cluster {i}" for i in vc.index]
@@ -289,7 +268,7 @@ def show_clustering_results() -> None:
         use_container_width=True,
     )
 
-    # PCA scatter — compressed 2D view of how clusters are separated
+    # ── PCA scatter — visual separation of clusters ───────────────────────────
     if X_scaled.shape[1] >= 2:
         cluster_names = ["Noise" if l == -1 else f"Cluster {l}" for l in labels]
         fig, caption = pca_scatter_fig(

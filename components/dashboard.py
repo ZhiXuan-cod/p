@@ -12,7 +12,7 @@ from components.export import export_page
 from components.training import training_page
 from components.upload import upload_page
 
-# ── Workflow definition ───────────────────────────────────────────────────────
+# ── Workflow step definitions ─────────────────────────────────────────────────
 WORKFLOW_PAGES = [
     "data_upload",
     "eda",
@@ -53,7 +53,7 @@ def dashboard_page(go_to) -> None:
         unsafe_allow_html=True,
     )
 
-    # Ensure the current page is a valid workflow page
+    # Ensure the current page is a valid workflow page.
     current_page = st.session_state.page
     if current_page not in WORKFLOW_PAGES:
         current_page = "data_upload"
@@ -90,7 +90,19 @@ def dashboard_page(go_to) -> None:
                 "Run `pip install pycaret` for full AutoML."
             )
 
-        if st.button("👋🏻 Logout", type="primary", use_container_width=True):
+        # Inline CSS to force white text on the Log Out button inside the sidebar.
+        st.markdown(
+            """
+            <style>
+            section[data-testid="stSidebar"] div.stButton > button {
+                color: white !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button("🚪 Log Out", type="primary", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_name = ""
             st.session_state.user_email = ""

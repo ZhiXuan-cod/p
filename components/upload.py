@@ -86,7 +86,7 @@ def upload_page() -> None:
     with col_a:
         st.caption("**Classification candidates:** " + (", ".join(class_candidates) or "none"))
     with col_b:
-        st.caption("**Regression candidates:** "     + (", ".join(reg_candidates)   or "none"))
+        st.caption("**Regression candidates:** " + (", ".join(reg_candidates) or "none"))
 
     current_problem = st.session_state.get("problem_type")
     default_idx     = available_tasks.index(current_problem) if current_problem in available_tasks else 0
@@ -141,22 +141,10 @@ def upload_page() -> None:
             st.session_state.problem_type  = problem_type
             st.success(f"✅ Target set to **{target_col}** ({problem_type}).")
 
-    # ── Data preview ──────────────────────────────────────────────────────────
+    # ── Data preview (Column Statistics removed) ──────────────────────────────
     st.markdown("---")
     st.markdown("### 📄 Data Preview")
     st.dataframe(df.head(10), use_container_width=True)
-
-    with st.expander("📊 Column Statistics"):
-        st.write(f"**Shape:** {df.shape}")
-        summary = pd.DataFrame({
-            "Column":    df.columns,
-            "Type":      df.dtypes.astype(str).values,
-            "Non-null":  df.count().values,
-            "Missing":   df.isnull().sum().values,
-            "Missing %": (df.isnull().sum().values / len(df) * 100).round(1),
-            "Unique":    df.nunique().values,
-        })
-        st.dataframe(summary, use_container_width=True)
 
 
 def _reset_and_restore(df: pd.DataFrame, file_id: str) -> None:

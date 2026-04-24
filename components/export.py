@@ -29,11 +29,11 @@ def export_page(go_to) -> None:
     problem_type: str = st.session_state.problem_type or ""
     metrics = st.session_state.cluster_metrics or {}
 
-    # ── Model summary (always visible, no button) ─────────────────────────────
+    # ── Model summary (always visible) ────────────────────────────────────────
     st.markdown("### 📊 Model Summary")
     if problem_type == "Clustering":
         col_a, col_b, col_c = st.columns(3)
-        col_a.metric("Algorithm", metrics.get("algorithm", "N/A"))
+        col_a.metric("Algorithm",     metrics.get("algorithm", "N/A"))
         col_b.metric("Clusters Found", metrics.get("num_clusters", "N/A"))
         sil = metrics.get("silhouette_score")
         col_c.metric("Silhouette Score", f"{sil:.4f}" if sil is not None else "N/A")
@@ -58,7 +58,8 @@ def export_page(go_to) -> None:
         if preds is not None and y_true is not None:
             preds, y_true = np.array(preds), np.array(y_true)
             with col_b:
-                st.markdown("**Test-set performance:**")
+                # Renamed from "Test-set performance" to "Evaluation Metrics"
+                st.markdown("**Evaluation Metrics:**")
                 if problem_type == "Classification":
                     st.write(f"• Accuracy: **{accuracy_score(y_true, preds):.4f}**")
                     st.write(f"• F1 (weighted): **{f1_score(y_true, preds, average='weighted', zero_division=0):.4f}**")
@@ -108,6 +109,7 @@ def export_page(go_to) -> None:
 # ── Report builder ────────────────────────────────────────────────────────────
 
 def _fmt(val, spec: str) -> str:
+    """Safely format a numeric value, returning 'N/A' if None or invalid."""
     if val is None:
         return "N/A"
     try:
@@ -117,6 +119,7 @@ def _fmt(val, spec: str) -> str:
 
 
 def _build_report(problem_type: str, metrics: dict) -> str:
+    """Build a plain-text report string used for the PDF download."""
     ts    = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     shape = st.session_state.data.shape if st.session_state.data is not None else "N/A"
 
@@ -156,5 +159,5 @@ def _build_report(problem_type: str, metrics: dict) -> str:
         f"Target        : {st.session_state.target_column}\n"
         f"Dataset shape : {shape}\n"
         f"Model         : {st.session_state.model}\n"
-        + (f"\n--- Test-set Performance ---\n{perf}" if perf else "")
+        + (f"\n--- Evaluation Metrics ---\n{perf}" if perf else "")
     )

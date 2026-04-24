@@ -32,7 +32,7 @@ def login_page(go_to) -> None:
             color: white !important; 
         }
 
-        /* 主按钮：蓝灰色，更协调 */
+        /* Login / Register submit buttons — gradient base */
         button[data-testid="stFormSubmitButton"],
         .stForm button {
             background: linear-gradient(135deg, #A9D6FF, #F6E7A1) !important;
@@ -44,13 +44,17 @@ def login_page(go_to) -> None:
             font-size: 1.05rem !important;
             box-shadow: 0 6px 18px rgba(63, 95, 125, 0.35) !important;
             width: 100% !important;
-            transition: all 0.2s ease !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease !important;
         }
 
+        /* Hover: scale up + coloured glow — same pattern as Back to Home */
         button[data-testid="stFormSubmitButton"]:hover,
         .stForm button:hover {
-            background: linear-gradient(135deg, #5b7a98, #496987) !important;
-            transform: translateY(-1px) !important;
+            transform: scale(1.05) !important;
+            box-shadow:
+                0 0 18px rgba(169, 214, 255, 0.85),
+                0 0 30px rgba(246, 231, 161, 0.55),
+                0 6px 18px rgba(63, 95, 125, 0.35) !important;
         }
 
         .stTextInput input:focus {
@@ -58,7 +62,7 @@ def login_page(go_to) -> None:
             box-shadow: 0 0 0 0.15rem rgba(111, 143, 177, 0.18) !important;
         }
 
-        /* 密码眼睛按钮：只轻量修饰，不隐藏 */
+        /* Password visibility toggle — keep it subtle */
         div[data-testid="stTextInput"] button[title*="password"],
         div[data-testid="stTextInput"] button[aria-label*="password"] {
             background: transparent !important;
@@ -89,12 +93,11 @@ def login_page(go_to) -> None:
             background: transparent !important;
         }
 
-        /* 只隐藏提示文字，不隐藏眼睛按钮 */
         [data-testid="InputInstructions"] {
             display: none !important;
         }
 
-        /* Back to Home 按钮 */
+        /* Back to Home button — white border, transparent background */
         .back-button-container button {
             background: transparent !important;
             color: white !important;
@@ -117,7 +120,7 @@ def login_page(go_to) -> None:
 
         tab_login, tab_register = st.tabs(["Login", "Register"])
 
-        # ── Login ─────────────────────────────────────────────────────────────
+        # ── Login tab ──────────────────────────────────────────────────────────
         with tab_login:
             with st.form("login_form"):
                 email = st.text_input("Email")
@@ -139,7 +142,7 @@ def login_page(go_to) -> None:
                     else:
                         st.error("Invalid email or password.")
 
-        # ── Register ──────────────────────────────────────────────────────────
+        # ── Register tab ───────────────────────────────────────────────────────
         with tab_register:
             with st.form("register_form"):
                 name = st.text_input("Full Name")
@@ -164,6 +167,7 @@ def login_page(go_to) -> None:
                     else:
                         st.error(msg)
 
+        # ── Back to Home button ────────────────────────────────────────────────
         st.markdown('<div class="back-button-container">', unsafe_allow_html=True)
         if st.button("← Back to Home", key="back_home"):
             go_to("front")
